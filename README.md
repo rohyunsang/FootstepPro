@@ -2,12 +2,12 @@
 
 > This repository holds the documentation and the example project of **Footstep Pro**, a footstep plugin with 30 surfaces sold on Fab. The plugin and its sounds are not included here; get them from Fab. The example project is under [Releases](https://github.com/rohyunsang/FootstepPro/releases/latest).
 
-Surface-aware footsteps for any character. Add the **Footstep** component and the character plays walk, run and landing sounds that match the floor under each foot. It ships with 30 surfaces (90 sounds), their physical materials and ready-made floor materials. Steps are read from the animation's foot bones, so you need no anim notifies and no code.
+Surface-aware footsteps for any character. Add the **Footstep** component and the character plays walk, run and landing sounds that match the floor under each foot, with dust, splashes, snow or leaves at the feet and footprints in sand, snow and mud. It ships with 30 surfaces (90 sounds), their physical materials and ready-made floor materials. Steps come from the animation's foot bones or from Footstep notifies, and an editor tool places those notifies for you.
 
 - **Engine versions:** Unreal Engine 5.5, 5.6, 5.7, 5.8
 - **Platform:** Windows (Win64)
 - **Audio:** 90 sounds (30 surfaces × walk / run / land), mono, 44.1 kHz
-- **Module:** `FootstepPro` (Runtime)
+- **Modules:** `FootstepPro` (Runtime), `FootstepProEditor` (Editor: the notify tool)
 - **Manual (PDF):** `Docs/FootstepPro_Manual.pdf`
 - **Online documentation:** https://github.com/rohyunsang/FootstepPro
 - **Example project:** https://github.com/rohyunsang/FootstepPro/releases/latest/download/FootstepPro_ExampleProject.zip
@@ -22,12 +22,14 @@ Surface-aware footsteps for any character. Add the **Footstep** component and th
 4. [What is included](#what-is-included)
 5. [How a surface is chosen](#how-a-surface-is-chosen)
 6. [Step detection](#step-detection)
-7. [Component settings](#component-settings)
-8. [Using your own floors and sounds](#using-your-own-floors-and-sounds)
-9. [Blueprint API](#blueprint-api)
-10. [Debugging](#debugging)
-11. [FAQ](#faq)
-12. [Support](#support)
+7. [Adding Footstep notifies automatically](#adding-footstep-notifies-automatically)
+8. [Effects and footprints](#effects-and-footprints)
+9. [Component settings](#component-settings)
+10. [Using your own floors and sounds](#using-your-own-floors-and-sounds)
+11. [Blueprint API](#blueprint-api)
+12. [Debugging](#debugging)
+13. [FAQ](#faq)
+14. [Support](#support)
 
 ## Installation
 
@@ -54,7 +56,9 @@ The example project opens on a map with all 30 floors, a metal ramp up to a wood
 
 1. Install the plugin from Fab (see Installation).
 2. Download [FootstepPro_ExampleProject.zip](https://github.com/rohyunsang/FootstepPro/releases/latest/download/FootstepPro_ExampleProject.zip), unzip it and open `FootstepPro.uproject` with UE 5.5 or later.
-3. Press **Play**. Use **WASD** to move and **Space** to jump. **Ctrl** switches between walking and running, and **F** shows the debug traces.
+3. Press **Play**. Use **WASD** to move and **Space** to jump. **Ctrl** switches between walking and running, **M** cycles the detection mode, and **F** shows the debug traces.
+
+The template's walk and run animations already carry Footstep notifies (placed with the notify tool), so the default **Auto** mode uses them; animations without notifies fall back to the foot bones.
 
 The **Footstep Demo HUD** actor in the map is only for the demo. You don't need it in your game.
 
@@ -79,6 +83,8 @@ In **Footstep Pro Content**:
 | `Materials` | `M_FootstepFloor`: the floor master material (color, noise, planks/tiles, grout) |
 | `Materials/Floors` | `MI_Floor_<Surface>`: a floor material per surface, with its physical material set (30) |
 | `Data` | `DA_FootstepSurfaces`: the surface library; `ATT_Footsteps`: attenuation (full volume within 2 m, silent after 20 m) |
+| `Effects` | `M_FootstepParticle` and its texture atlas (built-in step particles) |
+| `Effects/Footprints` | `M_FootprintDecal` and `MI_Print_Sand`, `_Snow`, `_Mud`, `_Dirt`, `_Wet` |
 
 ## How a surface is chosen
 
@@ -95,24 +101,62 @@ Landscapes work the same way. Set the physical material on each landscape layer 
 
 | Detection | How it works | Use it when |
 |---|---|---|
-| **Foot Bones** (default) | Watches each foot bone. A step plays when a foot comes back down after clearly lifting off. | Any walk or run animation; nothing to set up |
-| **Anim Notify** | Steps play only from **Footstep** notifies in your animations. | You want exact, hand-placed timing |
-| **Distance** | A step every half stride (**Walk Stride**, **Run Stride**) while moving on the ground. | Characters without legs, cameras, vehicles |
+| **Auto** (default) | Footstep notifies in animations that have them, foot bones in the others. | Most projects: hand-tuned timing where you placed notifies, automatic steps everywhere else |
+| **Foot Bones** | Watches each foot bone. A step plays when a foot comes back down after clearly lifting off. Footstep notifies are ignored. | Any walk or run animation; nothing to set up |
+| **Anim Notify** | Steps play only from **Footstep** notifies in your animations. | You want exact timing and nothing else |
+| **Distance** | A step every half stride (**Walk Stride**, **Run Stride**) while moving on the ground. Notifies are ignored. | Characters without legs, cameras, vehicles |
 
-**Anim Notify:** in an animation sequence, right-click a notify track > **Add Notify > Footstep**. Set **Foot Bone** to the foot touching down. **Type** is Auto by default, which picks walk or run from the speed; it can also be forced to Walk, Run or Land. In the animation editor the notify previews the default surface's sound.
+The modes never mix within one step, so a step never plays twice. In **Auto**, an animation counts as "has notifies" while Footstep notifies keep arriving (at least one per second); when they stop, the foot bones take over.
+
+**Placing notifies by hand:** in an animation sequence, right-click a notify track > **Add Notify > Footstep**. Set **Foot Bone** to the foot touching down. **Type** is Auto by default, which picks walk or run from the speed; it can also be forced to Walk, Run or Land. In the animation editor the notify previews the default surface's sound.
+
+## Adding Footstep notifies automatically
+
+![Footstep notifies placed by the tool on the template walk](Docs/images/notify_tool.png)
+
+The notify tool reads the foot bones of an animation and places a **Footstep** notify on every frame a foot touches down, on a track named **Footsteps** (it uses the same lift / contact rule as the Foot Bones detection).
+
+- **Content Browser:** select one or more animation sequences, right-click > **Footstep Pro > Add Footstep Notifies**. **Remove Footstep Notifies** takes them out again. Save the animations to keep the notifies.
+- **Animation Modifier:** in an animation, **Animation Data Modifiers > Add Modifier > Footstep Notifies**. It keeps its settings (foot bones, lift and contact height) with the animation and can be reapplied or reverted.
+- **Blueprint / Python (editor only):** `Find Foot Contacts` (look without changing), `Add Footstep Notifies`, `Remove Footstep Notifies`. For example, to process a folder in Python:
+
+```python
+import unreal
+for path in unreal.EditorAssetLibrary.list_assets("/Game/Characters/Animations", recursive=True):
+    seq = unreal.EditorAssetLibrary.load_asset(path)
+    if isinstance(seq, unreal.AnimSequence):
+        unreal.FootstepNotifyTools.add_footstep_notifies(seq, ["foot_l", "foot_r"], 8.0, 4.0)
+        unreal.EditorAssetLibrary.save_loaded_asset(seq)
+```
+
+Existing Footstep notifies are replaced, other notifies are left alone. For skeletons that don't use `foot_l` / `foot_r`, use the modifier or the Blueprint / Python nodes, which take the bone names.
+
+## Effects and footprints
+
+![Footprints in snow and a muddy trail](Docs/images/effects.jpg)
+
+**Particles:** each surface has built-in step particles: dust on dirt, sand and concrete, snow powder, splashes on water and mud, leaves and needles, gravel grains. They are camera-facing sprites simulated by the plugin and drawn with one instanced mesh per world, so they need no Niagara asset and cost one draw call for all characters. Each surface's **Particles** (shape, color, count, size, speed, lifetime) can be edited in the library. A landing spawns twice as many, running one and a half times as many.
+
+**Your own effects:** set a surface's **Effect** to a Niagara or Cascade system to spawn it on every step, with or instead of the built-in particles.
+
+**Footprints:** sand, snow, mud and soft dirt leave a decal under each foot. The right foot's print is mirrored automatically. Prints stay **Footprint Lifetime** seconds and fade out over the last **Footprint Fade Time** seconds; a character keeps at most **Max Footprints**.
+
+**Trails:** a surface's **Trail Footprint** is carried onto the next floors: after shallow water the next 8 steps leave wet prints, after mud the next 6 leave muddy prints, each fainter than the one before.
+
+Footprints are deferred decals, so the floor must receive decals (on by default for meshes and landscapes).
 
 ## Component settings
 
 | Setting | Default | |
 |---|---|---|
 | Surface Library | (plugin's) | Floors and sounds. Empty uses `DA_FootstepSurfaces`. |
-| Detection | Foot Bones | See [Step detection](#step-detection). |
+| Detection | Auto | See [Step detection](#step-detection). |
 | Run Speed | 350 | Ground speed (cm/s) from which run sounds play. |
 | Min Speed | 20 | No steps below this speed. |
 | Feet › Foot Bones | foot_l, foot_r | Bones or sockets of the feet. |
 | Feet › Foot Lift Height | 8 | A foot is in the air once it is this many cm above its planted height. Raise it if steps double up; lower it for shuffling or crouched walks. |
 | Feet › Foot Contact Height | 4 | A foot in the air touches down when it comes back within this many cm of its planted height. |
-| Distance › Walk / Run Stride | 140 / 220 | cm per two steps (Distance detection). |
+| Distance › Walk / Run Stride | 180 / 300 | cm per two steps (Distance detection). |
 | Landing › Play Landing | on | Landing sound after a fall. |
 | Landing › Min Landing Speed | 250 | Falling speed (cm/s) needed. Small hops stay quiet. |
 | Trace › Trace Distance | 60 | How far below the foot to look for the floor (cm). |
@@ -122,6 +166,14 @@ Landscapes work the same way. Set the physical material on each landscape layer 
 | Sound › Volume Variation | 0.15 | Each step up to 15 % quieter, at random. |
 | Sound › Attenuation | (plugin's) | Empty uses `ATT_Footsteps`. |
 | Sound › Concurrency | none | Optional Sound Concurrency, for example to limit steps from crowds. |
+| Effects › Spawn Effects | on | Built-in particles and each surface's own effect. |
+| Effects › Effect Scale | 1.0 | Multiplies the particle count. |
+| Effects › Effect Max Distance | 3000 | No effects farther than this from the camera (cm). 0: no limit. |
+| Footprints › Spawn Footprints | on | Footprints and trails. |
+| Footprints › Footprint Size | 14 × 32 | Width and length (cm). |
+| Footprints › Footprint Lifetime / Fade Time | 20 / 6 | Seconds a print stays, and the fade at the end. |
+| Footprints › Max Footprints | 60 | Prints one character keeps; the oldest goes first. |
+| Footprints › Footprint Forward Offset | 7 | Moves the print from the ankle toward the toes (cm). |
 | Debug › Draw Debug | off | Draws each floor trace and the surface name. |
 
 ## Using your own floors and sounds
@@ -143,6 +195,9 @@ Landscapes work the same way. Set the physical material on each landscape layer 
 | **Get Surface At** | The surface (and physical material) under a world location. |
 | **Get Last Surface** | Surface of the most recent step. |
 | **Get Movement Type** | Walk or Run for the current speed. |
+| **Get Active Detection** | The source in use right now (for Auto: Anim Notify or Foot Bones). |
+| **Spawn Particles** (Footstep Effects subsystem) | Spawns a built-in particle burst anywhere, for example for a slide or a dropped object. |
+| **Find Foot Contacts / Add / Remove Footstep Notifies** (editor) | The notify tool, for batch processing. |
 | **Resolve Surface** (library) | The surface name for a physical material. |
 | **Get Surface Names** (library) | All surface names in a library. |
 
@@ -164,7 +219,9 @@ Landscapes work the same way. Set the physical material on each landscape layer 
 
 **Steps play twice, or some are missing.** Your animation lifts the feet more or less than Manny. Raise **Foot Lift Height** if steps double, or lower it if steps are missing. `Footstep.LogFeet 1` shows the real heights. You can also switch to **Anim Notify** detection.
 
-**Does it work in multiplayer?** Each client plays the steps of the characters it sees, from their animation. Nothing is replicated or needed on the server.
+**Footprints don't show.** The floor must receive decals: check **Receives Decals** on the mesh, and that the project's **DBuffer Decals** setting is on (default). Prints from running are 1.5 m apart, so with a camera close behind the character they are often already off screen.
+
+**Does it work in multiplayer?** Each client plays the steps of the characters it sees, from their animation. Nothing is replicated. A dedicated server spawns no effects or footprints.
 
 **Can I use it on AI and other characters?** Yes. Add the component to any Character (or any actor with a skeletal mesh). Use a Sound Concurrency to cap crowds.
 
