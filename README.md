@@ -24,12 +24,13 @@ Surface-aware footsteps for any character. Add the **Footstep** component and th
 6. [Step detection](#step-detection)
 7. [Adding Footstep notifies automatically](#adding-footstep-notifies-automatically)
 8. [Effects and footprints](#effects-and-footprints)
-9. [Component settings](#component-settings)
-10. [Using your own floors and sounds](#using-your-own-floors-and-sounds)
-11. [Blueprint API](#blueprint-api)
-12. [Debugging](#debugging)
-13. [FAQ](#faq)
-14. [Support](#support)
+9. [NPCs, monsters and animals](#npcs-monsters-and-animals)
+10. [Component settings](#component-settings)
+11. [Using your own floors and sounds](#using-your-own-floors-and-sounds)
+12. [Blueprint API](#blueprint-api)
+13. [Debugging](#debugging)
+14. [FAQ](#faq)
+15. [Support](#support)
 
 ## Installation
 
@@ -85,6 +86,7 @@ In **Footstep Pro Content**:
 | `Data` | `DA_FootstepSurfaces`: the surface library; `ATT_Footsteps`: attenuation (full volume within 2 m, silent after 20 m) |
 | `Effects` | `M_FootstepParticle` and its texture atlas (built-in step particles) |
 | `Effects/Footprints` | `M_FootprintDecal` and `MI_Print_Sand`, `_Snow`, `_Mud`, `_Dirt`, `_Wet` |
+| `Effects/Textures` | Particle atlas, shoe print and paw print (`T_Pawprint`, `T_Pawprint_N`) |
 
 ## How a surface is chosen
 
@@ -145,6 +147,21 @@ Existing Footstep notifies are replaced, other notifies are left alone. For skel
 
 Footprints are deferred decals, so the floor must receive decals (on by default for meshes and landscapes).
 
+## NPCs, monsters and animals
+
+The component works the same on any Character: the player, AI-controlled NPCs, monsters and animals. The example project's **FootstepTests/Maps/FootstepCreatures** map shows them walking by themselves (idle → patrol → chase, with a jump):
+
+![A quadruped's paw prints in the sand](Docs/images/creatures_paws.jpg)
+
+| Character | What to set |
+|---|---|
+| **AI NPC** (Behavior Tree, State Tree, your own state machine) | Nothing. Steps follow the animation and the speed, wherever the movement comes from. |
+| **Large or small creatures** (actor or mesh scaled) | Nothing, with **Scale With Mesh** on (default): lift / contact heights, Run Speed, footprints and particles scale with the mesh. |
+| **Animals** (four legs or more) | Nothing if the feet are named foot / paw / hoof: they are found automatically. Otherwise list the feet in **Foot Bones** (any number). Set **Run Speed** to the animal's own run threshold, and **Footprint Mask / Normal** to `T_Pawprint` / `T_Pawprint_N` for paw prints. |
+| **Many NPCs** | Off-screen NPCs that only animate when seen keep stepping by distance (**Distance When Not Rendered**). Effects farther than **Effect Max Distance** are skipped. A Sound Concurrency caps crowds. |
+
+When two feet land together (a trotting animal, notifies on both feet), one sound plays and each foot still leaves its print. The notify tool finds the feet the same way, so four-legged animations get one notify per paw.
+
 ## Component settings
 
 | Setting | Default | |
@@ -153,7 +170,9 @@ Footprints are deferred decals, so the floor must receive decals (on by default 
 | Detection | Auto | See [Step detection](#step-detection). |
 | Run Speed | 350 | Ground speed (cm/s) from which run sounds play. |
 | Min Speed | 20 | No steps below this speed. |
-| Feet › Foot Bones | foot_l, foot_r | Bones or sockets of the feet. |
+| Feet › Foot Bones | foot_l, foot_r | Bones or sockets of the feet, any number. Found by name (foot / paw / hoof) if none of them exist. |
+| Feet › Scale With Mesh | on | Lift / contact heights, Run / Min Speed, footprints and particles follow the mesh's scale. |
+| Feet › Distance When Not Rendered | on | Off-screen meshes with frozen bones keep stepping by distance. |
 | Feet › Foot Lift Height | 8 | A foot is in the air once it is this many cm above its planted height. Raise it if steps double up; lower it for shuffling or crouched walks. |
 | Feet › Foot Contact Height | 4 | A foot in the air touches down when it comes back within this many cm of its planted height. |
 | Distance › Walk / Run Stride | 180 / 300 | cm per two steps (Distance detection). |
@@ -174,16 +193,25 @@ Footprints are deferred decals, so the floor must receive decals (on by default 
 | Footprints › Footprint Lifetime / Fade Time | 20 / 6 | Seconds a print stays, and the fade at the end. |
 | Footprints › Max Footprints | 60 | Prints one character keeps; the oldest goes first. |
 | Footprints › Footprint Forward Offset | 7 | Moves the print from the ankle toward the toes (cm). |
+| Footprints › Footprint Mask / Normal | none | Replaces the shoe print's shape for this character (for example the included paw print). |
 | Debug › Draw Debug | off | Draws each floor trace and the surface name. |
 
 ## Using your own floors and sounds
 
-**Your own floor:** set your material's **Phys Material** (Material > Details > Physical Material) to a `PM_Foot_*`. For a mesh, you can instead set **Phys Material Override** in its collision settings.
+**Window > Footstep Surfaces** (also under Tools) is the place to add floors and their sounds. Every surface shows how far along it is: three bars in the list (sounds, physical material, used on floors) with the next thing to do, and on the right one card per step whose blue button does that next thing.
 
-**A new surface:**
-1. Duplicate `DA_FootstepSurfaces` (or create a **Footstep Surface Library** data asset), then set it as the component's **Surface Library**.
-2. Add an element to **Surfaces**. Give it a **Surface** name (for example `Metal_Vent`) and add sounds to **Walk**, **Run** and **Land**. A list with several sounds plays them at random without immediate repeats. An empty Land list falls back to Run, and an empty Run list to Walk.
-3. Create a physical material of class **Footstep Physical Material**, set its **Footstep Surface** to `Metal_Vent`, and use it on your floor.
+![The Footstep Surfaces window](Docs/images/surface_editor.png)
+
+1. **Keep your floors in the project:** while the plugin's own library is open, a red banner offers **Make Project Copy**. It copies the library to `/Game/Footsteps` and, if the plugin's library was the project default, makes the copy the default, so every Footstep component without its own library uses it and plugin updates never touch it. The badge next to the library says which one you are editing: **Plugin**, **Project · not in use** (an orange banner offers **Use as Project Default**) or **Project · Default**. The setting lives in **Project Settings > Plugins > Footstep Pro**.
+2. **Add a floor:** select its footstep sounds in the Content Browser and click **+ New from N Selected Sounds**, or drag the sounds onto the window. The surface is named after the words all the sounds share (`Footstep_Wood_Walk_01` + `Footstep_Wood_JumpLand` → `Wood`), and the sounds are sorted by name: *land / jump / fall* go to **Land**, *run / jog / sprint* to **Run**, the rest to **Walk**. Sounds that are already in a surface select that surface instead of making a copy.
+3. **1 Sounds:** with the surface selected, **Add N Sounds** (or dragging) adds more. A surface with several sounds per type picks one at random without immediate repeats. **Walk / Run / Land** play one; the card says when a type borrows another (*Land uses Run*).
+4. **2 Physical material:** **Create PM_Foot_<Surface>** makes the physical material that leads to the surface (next to the library), or shows the existing one.
+5. **3 Used on floors:** select your floor materials in the Content Browser and click **Apply to N Materials**, or select floor actors in the level and click **Apply to N Actors**. The card counts the materials and level actors that use the surface. The default surface needs neither step: it plays wherever nothing else matches.
+6. **4 Saved:** **Save All** (top right, with the number of unsaved assets) saves the library and everything the window changed: physical materials, materials and level actors. A blue dot marks surfaces changed since the last save; the **Needs work** and **Unsaved** filters list only those.
+
+Below the cards, the details panel holds the surface's volume, particles, footprints and mapping. The status line at the bottom keeps the result of the last action and the number of problems (hover for the list: a surface without walk sounds, one no physical material leads to, a duplicate name, a missing default). Every change can be undone with Ctrl+Z. The same actions are available to editor Blueprints and Python as **Footstep Surface Tools** (`Add Surface From Sounds`, `Add Sounds`, `Find Or Create Physical Material`, `Apply To Materials`, `Apply To Actors`, `Validate`, `Copy Library To Project`, `Set Project Default Library`).
+
+**By hand:** set your material's **Phys Material** (Material > Details > Physical Material) to a `PM_Foot_*`, or set **Phys Material Override** in a mesh's collision settings. A new surface is an element of the library's **Surfaces** with a **Surface** name and sounds in **Walk**, **Run** and **Land** (an empty Land list falls back to Run, and an empty Run list to Walk), plus a physical material of class **Footstep Physical Material** whose **Footstep Surface** is that name.
 
 ## Blueprint API
 
@@ -199,6 +227,7 @@ Footprints are deferred decals, so the floor must receive decals (on by default 
 | **Spawn Particles** (Footstep Effects subsystem) | Spawns a built-in particle burst anywhere, for example for a slide or a dropped object. |
 | **Find Foot Contacts / Add / Remove Footstep Notifies** (editor) | The notify tool, for batch processing. |
 | **Resolve Surface** (library) | The surface name for a physical material. |
+| **Get Default Footstep Library** | The project default (Project Settings), else the plugin's library. |
 | **Get Surface Names** (library) | All surface names in a library. |
 
 ## Debugging
@@ -206,7 +235,7 @@ Footprints are deferred decals, so the floor must receive decals (on by default 
 | Console command | |
 |---|---|
 | `Footstep.Debug 1` | Draws every step's floor trace with the surface name, for all characters. |
-| `Footstep.Log 1` | Logs every step: `[Footstep] <time> <surface> <type> <sound>`. |
+| `Footstep.Log 1` | Logs every step: `[Footstep] <time> <surface> <type> <sound> <foot> <character>`. |
 | `Footstep.LogFeet 1` | Logs the foot bone heights every frame, for tuning Foot Lift / Contact Height. |
 
 ![Debug traces](Docs/images/debug.jpg)
