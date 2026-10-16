@@ -198,7 +198,7 @@ When two feet land together (a trotting animal, notifies on both feet), one soun
 
 ## Using your own floors and sounds
 
-**Window > Footstep Surfaces** (also under Tools) is the place to add floors and their sounds. Every surface shows how far along it is: three bars in the list (sounds, physical material, used on floors) with the next thing to do, and on the right one card per step whose blue button does that next thing.
+**Tools > Footstep Surfaces** is the place to add floors and their sounds. Every surface shows how far along it is: three bars in the list (sounds, physical material, used on floors) with the next thing to do, and on the right one card per step whose blue button does that next thing.
 
 ![The Footstep Surfaces window](Docs/images/surface_editor.png)
 
